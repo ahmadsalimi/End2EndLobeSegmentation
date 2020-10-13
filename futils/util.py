@@ -13,7 +13,7 @@ import SimpleITK as sitk
 from scipy import ndimage
 from skimage.io import imsave
 import nrrd
-
+import nibabel as nib
 
 MIN_BOUND = -1000.0
 MAX_BOUND = 400.0
@@ -29,13 +29,13 @@ def get_UID(file_name):
             
             return data
         except Exception as inst:
-            print type(inst)     # the exception instance
+            print(type(inst))     # the exception instance
       
-            print inst           # __str__ allows args to be printed directly
+            print(inst)           # __str__ allows args to be printed directly
 
             print('no pickle here')
             return [],[],[]
-    print 'nop'
+    print('nop')
     return[],[],[]
    
 #%%    
@@ -54,7 +54,7 @@ def load_itk(filename,original=False,get_orientation=False):
         itkimage = sitk.ReadImage(filename)
         
     else:
-        print 'nonfound:',filename
+        print('nonfound:',filename)
         return [],[],[]
 
     # Convert the image to a  numpy array first ands then shuffle the dimensions to get axis in the order z,y,x
@@ -198,7 +198,7 @@ def weight_map(label,labels =[0,4,5,6,7,8]):
    
     
     #fill holes and erode to have borders:
-    for i in range(1,gt_cat.shape[-1]):
+    for i in range(1, gt_cat.shape[-1]):
         #gt_cat[:,:,:,i] = ndimage.morphology.binary_fill_holes(gt_cat[:,:,:,i])    
         gt_cat[:,:,:,i] = ndimage.binary_erosion(gt_cat[:,:,:,i],iterations=5)
     
