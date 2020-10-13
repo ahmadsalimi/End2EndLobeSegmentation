@@ -7,7 +7,7 @@ Created on Wed Apr 12 10:20:10 2017
 import numpy as np
 from model import vnet
 from futils.util import sample_scan
-from  scipy import ndimage
+from scipy import ndimage
 from futils.vpatch import deconstruct_patch,reconstruct_patch
 from keras.models import model_from_json
 labels = [0,4,5,6,7,8]
