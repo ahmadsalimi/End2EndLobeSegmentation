@@ -52,14 +52,15 @@ def deconstruct_patch(scan,patch_shape=(64,128,128),stride = 0.25):
     stride = stride.astype(int)
     
     
-    
+    # raise Exception(f"{sh[:3]} - {p_sh} + {stride} / {stride}")
+
     n_patches =   (sh[0:3] - p_sh + stride)  / stride 
     
 
     
     patches = []
     
-    for z,x,y in np.ndindex(tuple(n_patches)):
+    for z,x,y in np.ndindex(tuple(n_patches.astype("int32"))):
         it = np.array([z,x,y],dtype= int)
         origin = it * stride
         finish = it * stride + p_sh        
