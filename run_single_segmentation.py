@@ -15,12 +15,14 @@ scan_file = 'VESSEL12_15.mhd'
 ct_scan, origin, spacing, orientation = futil.load_itk('data/val/A/'+scan_file, get_orientation=True)
 if (orientation[-1] == -1):
     ct_scan = ct_scan[::-1]
-print 'Origem: '
-print origin
-print 'Spacing: '
-print spacing
-print 'Orientation: '
-print orientation
+
+print(f'Shape: \n{ct_scan.shape}')
+print('Origem: ')
+print(origin)
+print('Spacing: ')
+print(spacing)
+print('Orientation: ')
+print(orientation)
 
 
 
@@ -32,7 +34,7 @@ ct_scan = futil.normalize(ct_scan)
 t1 = time.time()
 lobe_mask = segment.predict(ct_scan)
 t2 = time.time()
-print t2-t1
+print(f'elapsed: {t2-t1}s')
 
 
 #Save the segmentation
