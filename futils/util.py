@@ -9,7 +9,7 @@ import pickle
 import numpy as np
 import collections
 from skimage import color,transform
-import SimpleITK as sitk
+# import SimpleITK as sitk
 from scipy import ndimage
 from skimage.io import imsave
 # import nrrd
