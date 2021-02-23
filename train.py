@@ -1,12 +1,13 @@
 from keras import backend as K
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import sys
 from util.patch import Patches
 from dataloader import TwoScanIterator
 from model import vnet, dice_coef, dice_coef_loss, dice_coef_loss_r, dice_coef_mean, dice_coef
-
+from keras.models import model_from_json, Model
 from keras.optimizers import Adam, SGD
 from keras import callbacks
 from keras.utils import plot_model
@@ -20,8 +21,8 @@ import os
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 path_model = os.path.join(dir_path,'models')
-test_dir =  os.path.join(dir_path,'data/train')
-val_dir = os.path.join(dir_path,'data/val')
+train_dir =  os.path.join(dir_path,'../Data')
+val_dir = os.path.join(dir_path,'../Data')
 
 K.set_learning_phase(1)  # try with 1
 
@@ -98,6 +99,12 @@ parser.add_argument(
     default=1)
 
 
+def _load_metadata(data_specification: str) -> pd.DataFrame:
+    metadata: pd.DataFrame = pd.read_csv(f'../DataSeparation/V1.csv')
+    metadata = metadata[metadata.specification == data_specification]
+    metadata = metadata.drop('specification', axis=1)
+    metadata = metadata.reset_index().drop('index', axis=1)
+    return metadata
 
 def train(args):
 
@@ -164,7 +171,7 @@ def train(args):
 
             w_ = np.asarray(w_) * ratio
             w_ = w_.tolist()
-            print w_
+            print(w_)
             for _ in range(abs(deep_supervision)):
                 w_.append((1 - ratio) / deep_supervision)
                 loss_.append(dice_coef_loss_r)
@@ -178,15 +185,24 @@ def train(args):
     # our optimization
     optim = Adam(lr=learning_rate)
 
-    # Define the Model
-    vn = vnet(input_channels, ptch_sz, ptch_z_sz, args.feature_size, n_channels=len(labels), aux_output=bool_aux_output,
-              deep_supervision=abs(deep_supervision),bn=args.batch_norm,dr=args.dropout)
-    net = vn.get_vnet()  # u net using upsample
-    net.compile(optimizer=optim, loss=loss_, metrics=metrics_, loss_weights=w_)
+    # # Define the Model
+    # vn = vnet(input_channels, ptch_sz, ptch_z_sz, args.feature_size, n_channels=len(labels), aux_output=bool_aux_output,
+    #           deep_supervision=abs(deep_supervision),bn=args.batch_norm,dr=args.dropout)
+    # net = vn.get_vnet()  # u net using upsample
+    # net.compile(optimizer=optim, loss=loss_, metrics=metrics_, loss_weights=w_)
 
-    #load last model
-    if (args.load > 0):
-        net.load_weights((path_model+'/3dlobesweights.best.hdf5'))
+    # #load last model
+    # if (args.load > 0):
+    #     net.load_weights('models/final.h5')
+    model = 'models/final.h5'
+    model_path = model.split('.h5')[0]+'.json'
+    with open(model_path, "r") as json_file:
+        json_model = json_file.read()
+    
+        net: Model = model_from_json(json_model)
+    
+    net.load_weights(model)
+    net.compile(optimizer=optim, loss=loss_, metrics=metrics_, loss_weights=w_)
 
 
     # save model config
@@ -194,8 +210,10 @@ def train(args):
     with open((path_model+'/' + str_name + 'lobesMODEL.json'), "w") as json_file:
         json_file.write(model_json)
 
+    
+
     ###our data iterators
-    train_it = TwoScanIterator(test_dir, batch_size=batch_size, c_dir_name='D',
+    train_it = TwoScanIterator(train_dir, _load_metadata('train'), batch_size=batch_size, c_dir_name='D',
                                fnames_are_same=True, target_size=(trgt, trgt),
                                shuffle=True, is_a_grayscale=True, is_b_grayscale=False, is_b_categorical=True,
                                rotation_range=0.05, height_shift_range=0.05, slice_length=z_trgt,
@@ -206,7 +224,7 @@ def train(args):
                                patch_divide=patching, ptch_sz=ptch_sz, patch_z_sz=ptch_z_sz, ptch_str=-1,
                                labels=labels)
 
-    val_it = TwoScanIterator(val_dir, batch_size=batch_size, c_dir_name='D',
+    val_it = TwoScanIterator(val_dir, _load_metadata('val'), batch_size=batch_size, c_dir_name='D',
                              fnames_are_same=True, target_size=(trgt, trgt),
                              shuffle=True, is_a_grayscale=True, is_b_grayscale=False, is_b_categorical=True,
                              rotation_range=0.00, height_shift_range=0.00, slice_length=z_trgt,
@@ -230,11 +248,11 @@ def train(args):
     stopper = callbacks.EarlyStopping(monitor='loss', min_delta=0.001, patience=stop, verbose=0, mode='auto')
 
     #training our network :)
-    net.fit_generator(train_it.generator(), epoch_iterations * batch_size, nb_epoch=nb_epoch, verbose=1,
-                      validation_data=val_it.generator(), nb_val_samples=3,
+    net.fit_generator(train_it.generator(), epoch_iterations * batch_size, epochs=nb_epoch, verbose=1,
+                      validation_data=val_it.generator(),
                       callbacks=[checker, tb, stopper, saver])
 
-    print 'finish train: ', str_name
+    print('finish train: ', str_name)
 
 
 if __name__ == '__main__':

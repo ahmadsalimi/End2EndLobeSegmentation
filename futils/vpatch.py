@@ -8,7 +8,7 @@ Created on Fri May 26 14:57:47 2017
 
 import numpy as np
 
-def random_patch(scan,gt_scan = None,patch_shape=(64,128,128)):
+def random_patch(scan,gt_scan,patch_shape=(64,128,128)):
     sh = np.array(scan.shape)
     p_sh = np.array(patch_shape)
     
@@ -30,12 +30,12 @@ def random_patch(scan,gt_scan = None,patch_shape=(64,128,128)):
     patch = scan[np.ix_(idx[0],idx[1],idx[2])]
 
     
-    if(gt_scan != None):
-        gt_patch = gt_scan[np.ix_(idx[0],idx[1],idx[2])]
+    # if(gt_scan != None):
+    gt_patch = gt_scan[np.ix_(idx[0],idx[1],idx[2])]
         
-        return patch,gt_patch
-    else:
-        return patch
+    return patch,gt_patch
+    # else:
+        # return patch
         
 def deconstruct_patch(scan,patch_shape=(64,128,128),stride = 0.25):
     

@@ -12,7 +12,7 @@ from skimage import color,transform
 import SimpleITK as sitk
 from scipy import ndimage
 from skimage.io import imsave
-import nrrd
+# import nrrd
 import nibabel as nib
 
 MIN_BOUND = -1000.0

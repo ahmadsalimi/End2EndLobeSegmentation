@@ -2,10 +2,9 @@
 import os
 import random
 import numpy as np
+import pandas as pd
 from keras import backend as K
 from keras.preprocessing.image import Iterator, load_img, img_to_array
-from keras.preprocessing.image import apply_transform, flip_axis
-from keras.preprocessing.image import transform_matrix_offset_center
 from skimage import color, transform
 from futils.vpatch import random_patch
 import futils.util as futil
@@ -13,12 +12,60 @@ from  scipy import ndimage
 import time
 import glob
 
+def flip_axis(x, axis):
+    x = np.asarray(x).swapaxes(axis, 0)
+    x = x[::-1, ...]
+    x = x.swapaxes(0, axis)
+    return x
+
+def transform_matrix_offset_center(matrix, x, y):
+    o_x = float(x) / 2 + 0.5
+    o_y = float(y) / 2 + 0.5
+    offset_matrix = np.array([[1, 0, o_x], [0, 1, o_y], [0, 0, 1]])
+    reset_matrix = np.array([[1, 0, -o_x], [0, 1, -o_y], [0, 0, 1]])
+    transform_matrix = np.dot(np.dot(offset_matrix, matrix), reset_matrix)
+    return transform_matrix
+
+def apply_transform(x,
+                    transform_matrix,
+                    channel_axis=0,
+                    fill_mode='nearest',
+                    cval=0.):
+    """Apply the image transformation specified by a matrix.
+    Arguments:
+        x: 2D numpy array, single image.
+        transform_matrix: Numpy array specifying the geometric transformation.
+        channel_axis: Index of axis for channels in the input tensor.
+        fill_mode: Points outside the boundaries of the input
+            are filled according to the given mode
+            (one of `{'constant', 'nearest', 'reflect', 'wrap'}`).
+        cval: Value used for points outside the boundaries
+            of the input if `mode='constant'`.
+    Returns:
+        The transformed version of the input.
+    """
+    x = np.rollaxis(x, channel_axis, 0)
+    final_affine_matrix = transform_matrix[:2, :2]
+    final_offset = transform_matrix[:2, 2]
+    channel_images = [
+        ndimage.interpolation.affine_transform(
+            x_channel,
+            final_affine_matrix,
+            final_offset,
+            order=1,
+            mode=fill_mode,
+            cval=cval) for x_channel in x
+    ]
+    x = np.stack(channel_images, axis=0)
+    x = np.rollaxis(x, 0, channel_axis + 1)
+    return x
+
 """3D Extension of the work in https://github.com/costapt/vess2ret/blob/master/util/data.py"""
 
 class TwoScanIterator(Iterator):
     """Class to iterate A and B 3D scans (mhd or nrrd) at the same time."""
 
-    def __init__(self, directory, a_dir_name='A', b_dir_name='B', c_dir_name=None,
+    def __init__(self, directory, samples_metadata: pd.DataFrame, a_dir_name='A', b_dir_name='B', c_dir_name=None,
                  fnames_are_same=True,
                  is_a_binary=False, is_b_binary=False, is_a_grayscale=False,
                  is_b_grayscale=False, a_extension='.mhd', b_extension='.nrrd', c_extension='.mhd',
@@ -26,9 +73,9 @@ class TwoScanIterator(Iterator):
                  rotation_range=0., height_shift_range=0., width_shift_range=0.,
                  shear_range=0., zoom_range=0., fill_mode='constant', cval=0.,
                  horizontal_flip=False, vertical_flip=False, sequence_flip=False, slice_sample=0.5, slice_length=-1,
-                 dim_ordering=K.image_dim_ordering(),
+                #  dim_ordering=K.image_dim_ordering(),
                  N=-1, batch_size=1, shuffle=True, seed=None, weight_map = 10,
-                 patch_divide=False, ptch_sz=64, patch_z_sz=16, ptch_str=32, patches_per_scan=5, separate_output=False,
+                 patch_divide=False, ptch_sz=64, patch_z_sz=16, ptch_str=32, patches_per_scan=1, separate_output=False,
                  deep_supervision=0, labels=[]):
         """
         Iterate through two directories at the same time.
@@ -63,49 +110,51 @@ class TwoScanIterator(Iterator):
         """
         self.directory = directory
 
-        self.a_dir = os.path.join(directory, a_dir_name)
-        self.b_dir = os.path.join(directory, b_dir_name)
+        self._samples_metadata = samples_metadata
 
-        self.c_dir = None
+        # self.a_dir = os.path.join(directory, a_dir_name)
+        # self.b_dir = os.path.join(directory, b_dir_name)
+
+        # self.c_dir = None
         self.aux = False
-        if c_dir_name is not None:
-            self.c_dir = os.path.join(directory, c_dir_name)
-            self.aux = True
+        # if c_dir_name is not None:
+            # self.c_dir = os.path.join(directory, c_dir_name)
+            # self.aux = True
 
-        self.a_extension = a_extension
-        self.b_extension = b_extension
-        self.c_extension = c_extension
+        # self.a_extension = a_extension
+        # self.b_extension = b_extension
+        # self.c_extension = c_extension
 
-        a_files = set(x.split(a_extension)[0].split(self.a_dir + '/')[-1] for x in
-                      glob.glob(self.a_dir + '/*' + self.a_extension))
-        b_files = set(x.split(b_extension)[0].split(self.b_dir + '/')[-1] for x in
-                      glob.glob(self.b_dir + '/*' + self.b_extension))
+        # a_files = set(x.split(a_extension)[0].split(self.a_dir + '/')[-1] for x in
+                    #   glob.glob(self.a_dir + '/*' + self.a_extension))
+        # b_files = set(x.split(b_extension)[0].split(self.b_dir + '/')[-1] for x in
+                    #   glob.glob(self.b_dir + '/*' + self.b_extension))
 
 
         ##print(a_files)
         ##print(b_files)
 
-        if fnames_are_same is True:
+        # if fnames_are_same is True:
             # Files inside a and b should have the same name. Images without a pair
             # are discarded.
-            self.filenames = list(a_files.intersection(b_files))
-            self.b_fnames = self.filenames
-            if self.c_dir is not None:
-                self.c_fnames = self.filenames
+            # self.filenames = list(a_files.intersection(b_files))
+            # self.b_fnames = self.filenames
+            # if self.c_dir is not None:
+                # self.c_fnames = self.filenames
 
-        else:
-            self.filenames = sorted(os.listdir(self.a_dir))
-            self.a_fnames = sorted(os.listdir(self.a_dir))
-            self.b_fnames = sorted(os.listdir(self.b_dir))
-            if self.c_dir is not None:
-                self.c_fnames = sorted(os.listdir(self.b_dir))
+        # else:
+            # self.filenames = sorted(os.listdir(self.a_dir))
+            # self.a_fnames = sorted(os.listdir(self.a_dir))
+            # self.b_fnames = sorted(os.listdir(self.b_dir))
+            # if self.c_dir is not None:
+                # self.c_fnames = sorted(os.listdir(self.b_dir))
         # Use only a subset of the files. Good to easily overfit the model
-        if N > 0:
-            random.shuffle(self.filenames)
-            self.filenames = self.filenames[:N]
-        self.N = len(self.filenames)
+        # if N > 0:
+            # random.shuffle(self.filenames)
+            # self.filenames = self.filenames[:N]
+        self.N = len(self._samples_metadata)
 
-        self.dim_ordering = dim_ordering
+        # self.dim_ordering = dim_ordering
 
         self.target_size = target_size
 
@@ -118,8 +167,6 @@ class TwoScanIterator(Iterator):
         self.is_b_categorical = is_b_categorical
         if (self.labels == []):
             self.is_b_categorical = False
-
-
 
 
 
@@ -166,7 +213,7 @@ class TwoScanIterator(Iterator):
         else:
             self.slice_range = []
 
-        super(TwoScanIterator, self).__init__(len(self.filenames), batch_size,
+        super(TwoScanIterator, self).__init__(len(self._samples_metadata), batch_size,
                                               shuffle, seed)
 
 
@@ -186,30 +233,23 @@ class TwoScanIterator(Iterator):
         return scan
 
 
-    def load_scan(self, file_name, extension):
-        """Load mhd or nrrd 3d scan"""
-
-        if extension == '.mhd':
-            scan, _, _ = futil.load_itk(file_name)
-
-        elif extension == '.nrrd':
-            scan, _, _ = futil.load_nrrd(file_name)
-
+    def load_scan(self, file_name):
+        scan = np.load(file_name)
         return np.expand_dims(scan, axis=-1)
 
     def _load_img_pair(self, idx,  load_aux=False):
         """Get a pair of images with index idx."""
 
+        sample = self._samples_metadata.loc[idx]
+        # a_fname = self.filenames[idx] + self.a_extension
+        # b_fname = self.filenames[idx] + self.b_extension
+        # if load_aux:
+            # c_fname = self.filenames[idx] + self.c_extension
 
-        a_fname = self.filenames[idx] + self.a_extension
-        b_fname = self.filenames[idx] + self.b_extension
-        if load_aux:
-            c_fname = self.filenames[idx] + self.c_extension
-
-        a = self.load_scan(file_name=os.path.join(self.a_dir, a_fname), extension=self.a_extension)
-        b = self.load_scan(file_name=os.path.join(self.b_dir, b_fname), extension=self.b_extension)
-        if load_aux:
-            c = self.load_scan(file_name=os.path.join(self.c_dir, c_fname), extension=self.c_extension)
+        a = self.load_scan(file_name=os.path.join(self.directory, sample.dataset, 'scans', sample.scan_name))
+        b = self.load_scan(file_name=os.path.join(self.directory, sample.dataset, 'annotations', sample.annotation_name))
+        # if load_aux:
+            # c = self.load_scan(file_name=os.path.join(self.c_dir, c_fname), extension=self.c_extension)
 
         a = np.array(a)
         a = futil.normalize(a)  # we need to change the name of this
@@ -217,8 +257,8 @@ class TwoScanIterator(Iterator):
 
         b = np.array(b)
 
-        if load_aux:
-            c = np.array(c, dtype='float')
+        # if load_aux:
+            # c = np.array(c, dtype='float')
 
         if (self.slice_length < 0):
             downscale = np.random.uniform(self.slice_range[0], self.slice_range[-1])
@@ -229,13 +269,13 @@ class TwoScanIterator(Iterator):
         a = self.downscale_scan(a, self.target_size[0], z_length, order=1)
         b = self.downscale_scan(b, self.target_size[0], z_length, order=0)
 
-        if load_aux:
-            c = self.downscale_scan(c, self.target_size[0], z_length, order=1)
+        # if load_aux:
+            # c = self.downscale_scan(c, self.target_size[0], z_length, order=1)
 
-        if load_aux:
-            return a, b, c
-        else:
-            return a, b
+        # if load_aux:
+            # return a, b, c
+        # else:
+        return a, b
 
     def downscale_scan(self, scan, sz=128, z_length=64, order=1):
 
@@ -361,7 +401,7 @@ class TwoScanIterator(Iterator):
 
         # Lock the iterator when the index is changed.
         with self.lock:
-            index_array, _, current_batch_size = next(self.index_generator)
+            index_array = next(self.index_generator)
 
         for i, j in enumerate(index_array):
             if self.aux:
