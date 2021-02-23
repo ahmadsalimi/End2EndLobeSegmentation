@@ -75,7 +75,7 @@ class TwoScanIterator(Iterator):
                  horizontal_flip=False, vertical_flip=False, sequence_flip=False, slice_sample=0.5, slice_length=-1,
                 #  dim_ordering=K.image_dim_ordering(),
                  N=-1, batch_size=1, shuffle=True, seed=None, weight_map = 10,
-                 patch_divide=False, ptch_sz=64, patch_z_sz=16, ptch_str=32, patches_per_scan=1, separate_output=False,
+                 patch_divide=False, ptch_sz=64, patch_z_sz=16, ptch_str=32, patches_per_scan=5, separate_output=False,
                  deep_supervision=0, labels=[]):
         """
         Iterate through two directories at the same time.
